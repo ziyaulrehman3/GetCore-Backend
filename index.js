@@ -4,6 +4,7 @@ import express from "express";
 import dotenv from "dotenv";
 dotenv.config();
 
+import cron from "node-cron";
 import multer from "multer";
 import fs from "fs";
 
@@ -258,7 +259,10 @@ app.get("/settleEmiLoan/:id", JWTVerify, async (req, res) => {
   }
 });
 
-setInterval(() => IntrestApply(), 21600 * 1000);
+cron.schedule("0 * * * * *", () => {
+  // console.log("hii");
+  IntrestApply();
+});
 
 //EMI Loan End
 
