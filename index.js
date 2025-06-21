@@ -36,8 +36,8 @@ app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-app.get("/login", (req, res) => {
-  const { username, password } = req.headers;
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
 
   if (
     username === process.env.ADMIN_USERNAME &&
