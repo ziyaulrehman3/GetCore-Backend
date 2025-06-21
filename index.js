@@ -5,8 +5,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import cron from "node-cron";
+import cors from "cors";
 import multer from "multer";
 import fs from "fs";
+
+app.use(cors());
 
 import cloudinary from "./Components/cloudinary.js";
 import { JWTSign, JWTVerify } from "./Components/JWT.js";
