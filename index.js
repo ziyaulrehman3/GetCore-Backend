@@ -9,8 +9,6 @@ import cors from "cors";
 import multer from "multer";
 import fs from "fs";
 
-app.use(cors());
-
 import cloudinary from "./Components/cloudinary.js";
 import { JWTSign, JWTVerify } from "./Components/JWT.js";
 import {
@@ -34,6 +32,7 @@ import {
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
