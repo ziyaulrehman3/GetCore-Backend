@@ -184,7 +184,7 @@ app.get("/custumerList", JWTVerify, async (req, res) => {
   }
 });
 
-app.get("/analytics", JWTVerify, async (req, res) => {});
+// app.get("/analytics", JWTVerify, async (req, res) => {});
 //Single Loan Start
 app.post("/createSingleLoan/:id", JWTVerify, async (req, res) => {
   const custumerId = req.params.id;

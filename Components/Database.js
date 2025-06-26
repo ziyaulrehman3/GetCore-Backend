@@ -164,28 +164,27 @@ export const CustumerList = async () => {
   }
 };
 
-export const Analytics=async ()=>{
-  const {
-    noOfCustumer,
-    activeCustumer,
-    inactiveCustumer,
-    
-    emiLoanAmount
-    emiDueAmount,
+// export const Analytics=async ()=>{
+//   const {
+//     noOfCustumer,
+//     activeCustumer,
+//     inactiveCustumer,
 
-    singleLoanAmount,
-    singleDueAmount
+//     emiLoanAmount
+//     emiDueAmount,
 
-    todayDuePerson
+//     singleLoanAmount,
+//     singleDueAmount
 
-  }
+//     todayDuePerson
 
+//   }
 
-try{
-  const response=await Custumer.find();
-}
+// try{
+//   const response=await Custumer.find();
+// }
 
-}
+// }
 
 //Custumer End
 
