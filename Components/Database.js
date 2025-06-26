@@ -153,6 +153,40 @@ export const CustumerNoExist = async (req, res, next) => {
   }
 };
 
+export const CustumerList = async () => {
+  await MongoSwitch(true);
+
+  try {
+    const list = await Custumer.find({}, "_id name");
+    return list;
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const Analytics=async ()=>{
+  const {
+    noOfCustumer,
+    activeCustumer,
+    inactiveCustumer,
+    
+    emiLoanAmount
+    emiDueAmount,
+
+    singleLoanAmount,
+    singleDueAmount
+
+    todayDuePerson
+
+  }
+
+
+try{
+  const response=await Custumer.find();
+}
+
+}
+
 //Custumer End
 
 //Loan Comman Actions Start

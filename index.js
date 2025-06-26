@@ -27,6 +27,7 @@ import {
   DepositEmiLoan,
   SettleEmiLoan,
   IntrestApply,
+  CustumerList,
 } from "./Components/Database.js";
 
 const app = express();
@@ -174,6 +175,16 @@ app.delete("/deleteCustumer/:id", JWTVerify, async (req, res) => {
   }
 });
 
+app.get("/custumerList", JWTVerify, async (req, res) => {
+  try {
+    const response = await CustumerList();
+    res.status(200).json({ message: "Success", data: response });
+  } catch (err) {
+    res.status(400).json({ message: "Error at Database" });
+  }
+});
+
+app.get("/analytics", JWTVerify, async (req, res) => {});
 //Single Loan Start
 app.post("/createSingleLoan/:id", JWTVerify, async (req, res) => {
   const custumerId = req.params.id;
