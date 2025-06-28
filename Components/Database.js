@@ -420,13 +420,12 @@ export const DeleteSingleLoan = async (loanId) => {
         }
       );
 
-      MongoSwitch(false);
-
       return true;
     }
 
     throw new Error("Loan is Active!");
   } catch (err) {
+    console.log(err);
     throw new Error(err.message);
   }
 };
