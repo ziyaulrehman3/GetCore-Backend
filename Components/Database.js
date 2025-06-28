@@ -239,6 +239,33 @@ async function LoanNumberGenerator() {
 
   return LoanNumber;
 }
+
+export async function GenerateLoanList() {
+  MongoSwitch(true);
+
+  try {
+    const singleLoans = await SingleLoan.find();
+    const emiLoans = await EmiLoan.find();
+
+    const SinglLoanTypeList = singleLoans.map((loan) => ({
+      ...loan.toObject(),
+      loanType: "single",
+    }));
+
+    const EmiLoanTypeList = emiLoans.map((loan) => ({
+      ...loan.toObject(),
+      loanType: "emi",
+    }));
+
+    const loanList = [...SinglLoanTypeList, ...EmiLoanTypeList];
+
+    return loanList;
+  } catch (err) {
+    console.log(err);
+
+    throw new error(err.msg);
+  }
+}
 //Loan Comman Actions End
 
 //Single Loan Start
