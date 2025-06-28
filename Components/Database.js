@@ -246,14 +246,21 @@ export async function GenerateLoanList() {
   try {
     const singleLoans = await SingleLoan.find();
     const emiLoans = await EmiLoan.find();
+    const customerList = await Custumer.find({}, "_id name");
+    console.log(customerList);
+    const newCustomerList = Object.fromEntries(
+      customerList.map((item) => [item._id, item.name])
+    );
 
     const SinglLoanTypeList = singleLoans.map((loan) => ({
       ...loan.toObject(),
+      name: newCustomerList[loan.toObject().cusId],
       loanType: "single",
     }));
 
     const EmiLoanTypeList = emiLoans.map((loan) => ({
       ...loan.toObject(),
+      name: newCustomerList[loan.toObject().cusId],
       loanType: "emi",
     }));
 
