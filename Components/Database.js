@@ -273,6 +273,40 @@ export async function GenerateLoanList() {
     throw new error(err.msg);
   }
 }
+
+export async function LoanDetails(id, type) {
+  MongoSwitch(true);
+  try {
+    let Loan;
+
+    if (type === "single") {
+      Loan = await SingleLoan.findOne({ _id: id });
+    } else {
+      Loan = await EmiLoan.findOne({ _id: id });
+    }
+
+    // 🔒 Check if loan was found
+    if (!Loan) {
+      throw new Error(`Loan not found for id=${id} and type=${type}`);
+    }
+
+    const customerInfo = await Custumer.findOne(
+      { _id: Loan.cusId },
+      "_id name"
+    );
+
+    if (!customerInfo) {
+      throw new Error(`Customer not found for cusId=${Loan.cusId}`);
+    }
+
+    const newLoan = { ...Loan.toObject(), name: customerInfo.name };
+    return newLoan;
+  } catch (err) {
+    console.error("LoanDetails error:", err.message);
+    throw err;
+  }
+}
+
 //Loan Comman Actions End
 
 //Single Loan Start

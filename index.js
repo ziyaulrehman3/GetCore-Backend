@@ -29,6 +29,7 @@ import {
   IntrestApply,
   CustumerList,
   GenerateLoanList,
+  LoanDetails,
 } from "./Components/Database.js";
 
 const app = express();
@@ -195,6 +196,17 @@ app.get("/LoanList", JWTVerify, async (req, res) => {
   }
 });
 
+app.get("/LoanDetails/:id/:type", JWTVerify, async (req, res) => {
+  const { id, type } = req.params;
+  try {
+    const response = await LoanDetails(id, type);
+    console.log(response);
+    res.status(200).json({ message: "Success", data: response });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({ message: "Error at Database" });
+  }
+});
 // app.get("/analytics", JWTVerify, async (req, res) => {});
 //Single Loan Start
 app.post("/createSingleLoan/:id", JWTVerify, async (req, res) => {
