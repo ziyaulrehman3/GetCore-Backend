@@ -30,6 +30,8 @@ import {
   CustumerList,
   GenerateLoanList,
   LoanDetails,
+  RecentTransactionList,
+  Dashboard,
 } from "./Components/Database.js";
 
 const app = express();
@@ -207,6 +209,26 @@ app.get("/LoanDetails/:id/:type", JWTVerify, async (req, res) => {
     res.status(400).json({ message: "Error at Database" });
   }
 });
+
+app.get("/RecentTransaction", JWTVerify, async (req, res) => {
+  try {
+    const response = await RecentTransactionList();
+    res.status(200).json({ message: "Success", data: response });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get("/Dashboard", JWTVerify, async (req, res) => {
+  try {
+    const response = await Dashboard();
+    res.status(200).json({ message: "Success", data: response });
+  } catch (err) {
+    console.log(err);
+    res.status(400).json({ message: err.message });
+  }
+});
 // app.get("/analytics", JWTVerify, async (req, res) => {});
 //Single Loan Start
 app.post("/createSingleLoan/:id", JWTVerify, async (req, res) => {
@@ -240,6 +262,7 @@ app.post("/depositSingleLoan/:id", JWTVerify, async (req, res) => {
 
     res.status(200).json({ message: "Amount Deposit Succesfully" });
   } catch (err) {
+    console.log(err.message);
     res.status(400).json({ message: err.message });
   }
 });
@@ -295,7 +318,7 @@ app.get("/settleEmiLoan/:id", JWTVerify, async (req, res) => {
   }
 });
 
-cron.schedule("0 * * * * *", () => {
+cron.schedule("0 0 0 * * *", () => {
   // console.log("hii");
   IntrestApply();
 });

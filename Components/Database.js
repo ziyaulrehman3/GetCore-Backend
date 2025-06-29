@@ -307,6 +307,38 @@ export async function LoanDetails(id, type) {
   }
 }
 
+const recentTransaction = new mongoose.Schema({
+  loanId: {
+    type: Number,
+    required: true,
+  },
+  loanType: {
+    type: String,
+    required: true,
+  },
+
+  transaction: {
+    type: PassbookEntry,
+    required: true,
+  },
+});
+
+const RecentTransaction = mongoose.model(
+  "RecentTransaction",
+  recentTransaction
+);
+
+export const RecentTransactionList = async () => {
+  MongoSwitch(true);
+  try {
+    const response = await RecentTransaction.find();
+    return response;
+  } catch (err) {
+    console.error("RecentTransactionList error:", err.message);
+    throw new Error(err.message);
+  }
+};
+
 //Loan Comman Actions End
 
 //Single Loan Start
@@ -450,9 +482,9 @@ export const DepositSingleLoan = async (loanId, data) => {
 
     const transaction = {
       desc: data.desc,
-      credit: data.credit,
+      credit: Number(data.credit),
       debit: 0,
-      balance: lastTransaction.balance + data.credit,
+      balance: lastTransaction.balance + Number(data.credit),
     };
 
     if (loanDetails.loanStatus) {
@@ -471,7 +503,21 @@ export const DepositSingleLoan = async (loanId, data) => {
       SettleSingleLoan(loanId);
     }
 
-    MongoSwitch(false);
+    const count = await RecentTransaction.countDocuments();
+
+    if (count > 9) {
+      await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
+    }
+
+    const newRecentTransaction = new RecentTransaction({
+      loanId,
+      loanType: "single",
+      transaction,
+    });
+
+    newRecentTransaction.save();
+
+    // MongoSwitch(false);
     return true;
   } catch (err) {
     throw new Error(err.message);
@@ -610,6 +656,17 @@ export const DeleteEmiLoan = async (loanId) => {
   }
 };
 
+export const SettleEmiLoan = async (loanId) => {
+  try {
+    MongoSwitch(true);
+
+    await EmiLoan.findOneAndUpdate({ _id: loanId }, { loanStatus: false });
+    MongoSwitch(false);
+  } catch (err) {
+    throw new Error(err.message);
+  }
+};
+
 export const DepositEmiLoan = async (loanId, data) => {
   try {
     MongoSwitch(true);
@@ -620,9 +677,9 @@ export const DepositEmiLoan = async (loanId, data) => {
 
     const transaction = {
       desc: data.desc,
-      credit: data.credit,
+      credit: Number(data.credit),
       debit: 0,
-      balance: lastTransaction.balance + data.credit,
+      balance: lastTransaction.balance + Number(data.credit),
     };
     const numberOfDepositEmis = loanDetails.numberOfDepositEmis + 1;
 
@@ -639,18 +696,25 @@ export const DepositEmiLoan = async (loanId, data) => {
       throw new Error("Loan is Already Settle");
     }
 
-    MongoSwitch(false);
-  } catch (err) {
-    throw new Error(err.message);
-  }
-};
+    if (transaction.balance == 0) {
+      SettleEmiLoan(loanId);
+    }
 
-export const SettleEmiLoan = async (loanId) => {
-  try {
-    MongoSwitch(true);
+    const count = await RecentTransaction.countDocuments();
 
-    await EmiLoan.findOneAndUpdate({ _id: loanId }, { loanStatus: false });
-    MongoSwitch(false);
+    if (count > 9) {
+      await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
+    }
+
+    const newRecentTransaction = new RecentTransaction({
+      loanId,
+      loanType: "emi",
+      transaction,
+    });
+
+    newRecentTransaction.save();
+
+    // MongoSwitch(false);
   } catch (err) {
     throw new Error(err.message);
   }
@@ -670,16 +734,26 @@ export const IntrestApply = async () => {
 
     loanIdList.forEach(async (id) => {
       const loanDetail = await EmiLoan.findOne({ _id: id });
-      const loanDate = new Date(loanDetail.lastIntrestApply);
+      const intrestDate = new Date(loanDetail.lastIntrestApply);
       const todayDate = new Date();
 
       const difference =
         (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
         todayDate.getDate() -
-        ((loanDate.getFullYear() * 12 + loanDate.getMonth()) * 30 +
-          loanDate.getDate());
+        ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
+          intrestDate.getDate());
 
-      if (difference >= 30) {
+      const monthlyDifference =
+        todayDate.getFullYear() * 100 +
+        todayDate.getMonth() -
+        (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
+
+      const todayFlag =
+        (todayDate.getDate() === intrestDate.getDate() &&
+          monthlyDifference > 0) ||
+        difference > 31;
+
+      if (todayFlag) {
         const transaction = {
           desc: "Monthly Intrest Apply",
           credit: 0,
@@ -688,8 +762,6 @@ export const IntrestApply = async () => {
             loanDetail.balance +
             (loanDetail.balance / 100) * loanDetail.intrestRate,
         };
-
-        console.log("Hello:" + loanDetail.balance);
 
         const balance = transaction.balance;
         const lastIntrestApply = Date.now();
@@ -708,3 +780,71 @@ export const IntrestApply = async () => {
   }
 };
 //EMI Loan End
+
+export const Dashboard = async () => {
+  MongoSwitch(true);
+
+  try {
+    const singleActiveLoan = await SingleLoan.countDocuments({
+      loanStatus: true,
+    });
+
+    const todayDate = new Date();
+    const start = new Date(
+      todayDate.getFullYear(),
+      todayDate.getMonth(),
+      todayDate.getDate()
+    );
+
+    const end = new Date(
+      todayDate.getFullYear(),
+      todayDate.getMonth(),
+      todayDate.getDate() + 1
+    );
+
+    const singleLoanData = await SingleLoan.find(
+      { loanStatus: true, dueDate: { $gte: start, $lt: end } },
+      { passbook: 0, loanStatus: 0, cusId: 0 }
+    ).lean();
+
+    const loansDetails = await EmiLoan.find(
+      { loanStatus: true },
+      { passbook: 0, loanStatus: 0, cusId: 0 }
+    ).lean();
+
+    const emiActiveLoan = loansDetails.length;
+
+    const emiLoanData = loansDetails.filter((loan) => {
+      const intrestDate = new Date(loan.lastIntrestApply);
+
+      const difference =
+        (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
+        todayDate.getDate() -
+        ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
+          intrestDate.getDate());
+
+      const monthlyDifference =
+        todayDate.getFullYear() * 100 +
+        todayDate.getMonth() -
+        (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
+
+      const todayFlag =
+        (todayDate.getDate() === intrestDate.getDate() &&
+          monthlyDifference > 0) ||
+        difference > 31;
+
+      return todayFlag;
+    });
+
+    const data = {
+      single: singleLoanData,
+      emi: emiLoanData,
+      singleActiveLoan,
+      emiActiveLoan,
+    };
+
+    return data;
+  } catch (err) {
+    throw new Error(err);
+  }
+};
