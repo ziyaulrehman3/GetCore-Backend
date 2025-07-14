@@ -505,7 +505,7 @@ export const DepositSingleLoan = async (loanId, data) => {
 
     const count = await RecentTransaction.countDocuments();
 
-    if (count > 9) {
+    if (count > 29) {
       await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
     }
 
@@ -702,7 +702,7 @@ export const DepositEmiLoan = async (loanId, data) => {
 
     const count = await RecentTransaction.countDocuments();
 
-    if (count > 9) {
+    if (count > 29) {
       await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
     }
 
@@ -790,6 +790,7 @@ export const Dashboard = async () => {
     });
 
     const todayDate = new Date();
+
     const start = new Date(
       todayDate.getFullYear(),
       todayDate.getMonth(),
@@ -803,13 +804,22 @@ export const Dashboard = async () => {
     );
 
     const singleLoanData = await SingleLoan.find(
-      { loanStatus: true, dueDate: { $gte: start, $lt: end } },
-      { passbook: 0, loanStatus: 0, cusId: 0 }
+      // { loanStatus: true, dueDate: { $gte: start, $lt: end } },
+      { loanStatus: true },
+      { passbook: 0, loanStatus: 0, __v: 0, loanDate: 0, cusId: 0, dueDate: 0 }
     ).lean();
 
     const loansDetails = await EmiLoan.find(
       { loanStatus: true },
-      { passbook: 0, loanStatus: 0, cusId: 0 }
+      {
+        passbook: 0,
+        loanStatus: 0,
+        cusId: 0,
+        __v: 0,
+        loanDate: 0,
+        cusId: 0,
+        intrestRate: 0,
+      }
     ).lean();
 
     const emiActiveLoan = loansDetails.length;
@@ -833,12 +843,17 @@ export const Dashboard = async () => {
           monthlyDifference > 0) ||
         difference > 31;
 
-      return todayFlag;
+      // return todayFlag;
+      return true;
     });
+
+    const updatedEmiLoanData = emiLoanData.map(
+      ({ lastIntrestApply, ...rest }) => rest
+    );
 
     const data = {
       single: singleLoanData,
-      emi: emiLoanData,
+      emi: updatedEmiLoanData,
       singleActiveLoan,
       emiActiveLoan,
     };
