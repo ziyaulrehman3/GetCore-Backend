@@ -804,8 +804,8 @@ export const Dashboard = async () => {
     );
 
     const singleLoanData = await SingleLoan.find(
-      // { loanStatus: true, dueDate: { $gte: start, $lt: end } },
-      { loanStatus: true },
+      { loanStatus: true, dueDate: { $gte: start, $lt: end } },
+      // { loanStatus: true },
       { passbook: 0, loanStatus: 0, __v: 0, loanDate: 0, cusId: 0, dueDate: 0 }
     ).lean();
 
@@ -843,8 +843,8 @@ export const Dashboard = async () => {
           monthlyDifference > 0) ||
         difference > 31;
 
-      // return todayFlag;
-      return true;
+      return todayFlag;
+      // return true;
     });
 
     const updatedEmiLoanData = emiLoanData.map(
