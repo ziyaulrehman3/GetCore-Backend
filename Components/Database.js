@@ -235,8 +235,6 @@ async function LoanNumberGenerator() {
     }
   }
 
-  MongoSwitch(false);
-
   return LoanNumber;
 }
 
@@ -246,7 +244,9 @@ export async function GenerateLoanList() {
   try {
     const singleLoans = await SingleLoan.find();
     const emiLoans = await EmiLoan.find();
+
     const customerList = await Custumer.find({}, "_id name");
+
     console.log(customerList);
     const newCustomerList = Object.fromEntries(
       customerList.map((item) => [item._id, item.name])
@@ -528,115 +528,134 @@ export const DepositSingleLoan = async (loanId, data) => {
 
 //EMI Loan Start
 
-const EmiLoanSchema = new mongoose.Schema({
-  _id: {
-    type: Number,
-    required: true,
+// EMI Subschema
+const emiSchema = new mongoose.Schema(
+  {
+    emiNo: { type: Number, required: true },
+    emiDate: { type: Date, required: true },
+    principal: { type: Number, required: true },
+    interest: { type: Number, required: true },
+    emiAmount: { type: Number, required: true },
+    remainingPrincipal: { type: Number, required: true },
+    paidAmount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ["Paid", "Unpaid", "Partial"],
+      default: "Unpaid",
+    },
+    paidDate: { type: Date, default: null },
   },
-  cusId: {
-    type: Number,
-    required: true,
-  },
-  loanDate: {
-    type: Date,
-    required: true,
-    default: Date.now,
-  },
-  numberOfEmis: {
-    type: Number,
-    required: true,
-  },
-  numberOfDepositEmis: {
-    type: Number,
-    required: true,
-    default: 0,
-  },
-  lastIntrestApply: {
-    type: Date,
-    required: true,
-    default: Date.now,
-  },
-  loanStatus: {
-    type: Boolean,
-    required: true,
-    default: true,
-  },
-  loanAmount: {
-    type: Number,
-    required: true,
-  },
-  intrestRate: {
-    type: Number,
-    required: true,
-  },
-  balance: {
-    type: Number,
-    required: true,
-  },
-  passbook: {
-    type: [PassbookEntry],
-    required: true,
-  },
+  {
+    _id: false,
+  }
+);
+
+// Main EMI Loan Schema
+const loanSchema = new mongoose.Schema({
+  _id: { type: Number, required: true }, // Custom Loan ID
+  cusId: { type: Number, required: true }, // Customer ID
+  loanDate: { type: Date, required: true, default: Date.now }, // Loan Creation Date
+  loanStatus: { type: Boolean, required: true, default: true }, // Active/Closed
+  loanAmount: { type: Number, required: true }, // Total Loan Amount
+  intrestRate: { type: Number, required: true }, // Annual Interest Rate
+  // duePrincipal: { type: Number, required: true }, // Remaining Balance
+  dueAmount: { type: Number, required: true }, // Remaining Overall with Intrest
+  emis: [emiSchema], // Array of EMIs
 });
 
-const EmiLoan = mongoose.model("EmiLoan", EmiLoanSchema);
+const EmiLoan = mongoose.model("EmiLoan", loanSchema);
 
-export const CreateEmiLoan = async (cusId, data) => {
-  const { loanAmount, intrestRate, numberOfEmis } = data;
+export async function CreateEmiLoan(cusId, data) {
+  const { loanAmount, intrestRate, totalEmis, firstEmiDate, mode } = data;
+
   try {
     const _id = await LoanNumberGenerator();
+    const emis = [];
+    let principalRemaining = loanAmount;
 
-    const newTransaction1 = {
-      date: Date.now(),
-      desc: "Loan Amount Grant",
-      credit: 0,
-      debit: Number(loanAmount),
-      balance: -Number(loanAmount),
-    };
+    const periodsInYear = mode === "monthly" ? 12 : 52;
+    const periodicRate = Number(intrestRate) / 100 / periodsInYear;
 
-    const newTransaction2 = {
-      date: Date.now(),
-      desc: "Intrest Amount Apply",
-      credit: 0,
-      debit: (Number(loanAmount) / 100) * intrestRate,
-      balance:
-        newTransaction1.balance - (Number(loanAmount) / 100) * intrestRate,
-    };
+    const preciseEmi =
+      (loanAmount * periodicRate) /
+      (1 - Math.pow(1 + periodicRate, -totalEmis));
+    const fixedEmiAmount = +preciseEmi.toFixed(2);
 
-    const balance = newTransaction2.balance;
+    let emiDate = new Date(firstEmiDate);
+    let dueAmount = 0;
 
-    const passbook = [newTransaction1, newTransaction2];
+    for (let i = 1; i <= totalEmis; i++) {
+      const interest = +(principalRemaining * periodicRate).toFixed(2);
+      let principalPaid = +(fixedEmiAmount - interest).toFixed(2);
+      let currentEmiAmount = fixedEmiAmount;
+      // If last EMI - Adjust to clear remaining principal
+      if (i === totalEmis) {
+        principalPaid = +principalRemaining.toFixed(2);
+        currentEmiAmount = +(principalPaid + interest).toFixed(2);
+      }
 
-    const newLoan = new EmiLoan({
+      principalRemaining = +(principalRemaining - principalPaid).toFixed(2);
+      if (principalRemaining < 0) principalRemaining = 0;
+
+      emis.push({
+        emiNo: i,
+        emiDate: new Date(emiDate),
+        principal: principalPaid,
+        interest: interest,
+        emiAmount: currentEmiAmount,
+        remainingPrincipal: principalRemaining,
+        paidAmount: 0,
+        status: "Unpaid",
+        paidDate: null,
+      });
+      dueAmount = Math.round((dueAmount + currentEmiAmount) * 100) / 100;
+
+      // Increment date for next EMI
+      if (mode === "monthly") {
+        emiDate.setMonth(emiDate.getMonth() + 1);
+      } else {
+        emiDate.setDate(emiDate.getDate() + 7);
+      }
+    }
+
+    if (emis[totalEmis - 1].remainingPrincipal > 0) {
+      const temp = emis[totalEmis - 1];
+      emis[totalEmis - 1].principal += temp.remainingPrincipal;
+      emis[totalEmis - 1].emiAmount += temp.remainingPrincipal;
+      emis[totalEmis - 1].remainingPrincipal -= temp.remainingPrincipal;
+      dueAmount += temp.remainingPrincipal;
+    }
+
+    const loan = new EmiLoan({
       _id,
       cusId,
+      loanDate: new Date(),
+      loanStatus: true,
+      dueAmount,
       loanAmount,
       intrestRate,
-      numberOfEmis,
-      numberOfDepositEmis: 0,
-      balance,
-      passbook,
+      emis,
     });
 
-    await MongoSwitch(true);
-    await newLoan.save();
-
+    await loan.save();
     await Custumer.findOneAndUpdate(
       { _id: cusId },
       { $push: { emiLoanStack: _id } }
     );
+    console.log("Loan Created Successfully");
+    return loan;
   } catch (err) {
-    console.log(err);
-    throw new Error(err.message);
+    console.error("Error creating loan:", err);
+    throw err;
   }
-};
+}
 
 export const DeleteEmiLoan = async (loanId) => {
   try {
     MongoSwitch(true);
     const response = await EmiLoan.findOne({ _id: loanId });
 
-    if (response.passbook.length < 3) {
+    if (response.loanAmount < response.dueAmount) {
       await EmiLoan.findOneAndDelete({ _id: loanId });
       await Custumer.findOneAndUpdate(
         { _id: response.cusId },
@@ -646,22 +665,9 @@ export const DeleteEmiLoan = async (loanId) => {
       );
 
       MongoSwitch(false);
-
-      return true;
+    } else {
+      throw new Error("Loan is Active!");
     }
-
-    throw new Error("Loan is Active!");
-  } catch (err) {
-    throw new Error(err.message);
-  }
-};
-
-export const SettleEmiLoan = async (loanId) => {
-  try {
-    MongoSwitch(true);
-
-    await EmiLoan.findOneAndUpdate({ _id: loanId }, { loanStatus: false });
-    MongoSwitch(false);
   } catch (err) {
     throw new Error(err.message);
   }
@@ -672,114 +678,61 @@ export const DepositEmiLoan = async (loanId, data) => {
     MongoSwitch(true);
     const loanDetails = await EmiLoan.findOne({ _id: loanId });
     console.log(loanDetails);
-    const lastTransaction =
-      loanDetails.passbook[loanDetails.passbook.length - 1];
 
-    const transaction = {
-      desc: data.desc,
-      credit: Number(data.credit),
-      debit: 0,
-      balance: lastTransaction.balance + Number(data.credit),
-    };
-    const numberOfDepositEmis = loanDetails.numberOfDepositEmis + 1;
+    if (loanDetails.loanStatus !== "Paid") {
+      const tempEmi = loanDetails.emis[data.emiNo - 1];
 
-    if (loanDetails.loanStatus) {
-      await EmiLoan.findOneAndUpdate(
-        { _id: loanId },
-        {
-          $push: { passbook: transaction },
-          balance: transaction.balance,
-          numberOfDepositEmis,
+      if (tempEmi.status !== "Paid") {
+        const restEmiAmount = Number(
+          tempEmi.emiAmount - tempEmi.paidAmount
+        ).toFixed(2);
+
+        let paidAmount = 0;
+        const credit = Number(Number(data.credit).toFixed(2));
+        let status;
+        let paidDate = new Date();
+        let loanStatus = true;
+        let dueAmount = loanDetails.dueAmount;
+
+        if (restEmiAmount >= credit) {
+          paidAmount = Number(tempEmi.paidAmount + credit).toFixed(2);
+
+          if (paidAmount == tempEmi.emiAmount) {
+            status = "Paid";
+
+            if (tempEmi.emiNo == loanDetails.length) {
+              loanStatus = false;
+            }
+          } else {
+            status = "Partial";
+          }
+          dueAmount = Number(dueAmount - credit).toFixed(2);
+
+          await EmiLoan.findOneAndUpdate(
+            { _id: loanId },
+            {
+              $set: {
+                loanStatus,
+                dueAmount,
+                [`emis.${tempEmi.emiNo - 1}.status`]: status,
+                [`emis.${tempEmi.emiNo - 1}.paidAmount`]: paidAmount,
+                [`emis.${tempEmi.emiNo - 1}.paidDate`]: paidDate,
+              },
+            }
+          );
+        } else {
+          throw new Error("Deposit Amount More than EMI Amount");
         }
-      );
+      } else {
+        throw new Error("Emi is already paid");
+      }
     } else {
-      throw new Error("Loan is Already Settle");
+      throw new Error("Loan is Inactive");
     }
-
-    if (transaction.balance == 0) {
-      SettleEmiLoan(loanId);
-    }
-
-    const count = await RecentTransaction.countDocuments();
-
-    if (count > 29) {
-      await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
-    }
-
-    const newRecentTransaction = new RecentTransaction({
-      loanId,
-      loanType: "emi",
-      transaction,
-    });
-
-    newRecentTransaction.save();
-
-    // MongoSwitch(false);
   } catch (err) {
     throw new Error(err.message);
   }
 };
-
-export const IntrestApply = async () => {
-  // console.log("Intrest Appling Function Call...");
-
-  try {
-    await MongoSwitch(true);
-
-    const loanIdList = await EmiLoan.find(
-      { loanStatus: true, balance: { $lt: 0 } },
-      "_id"
-    ).lean();
-    // console.log(loanIdList);
-
-    loanIdList.forEach(async (id) => {
-      const loanDetail = await EmiLoan.findOne({ _id: id });
-      const intrestDate = new Date(loanDetail.lastIntrestApply);
-      const todayDate = new Date();
-
-      const difference =
-        (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
-        todayDate.getDate() -
-        ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
-          intrestDate.getDate());
-
-      const monthlyDifference =
-        todayDate.getFullYear() * 100 +
-        todayDate.getMonth() -
-        (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
-
-      const todayFlag =
-        (todayDate.getDate() === intrestDate.getDate() &&
-          monthlyDifference > 0) ||
-        difference > 31;
-
-      if (todayFlag) {
-        const transaction = {
-          desc: "Monthly Intrest Apply",
-          credit: 0,
-          debit: (loanDetail.balance / 100) * loanDetail.intrestRate,
-          balance:
-            loanDetail.balance +
-            (loanDetail.balance / 100) * loanDetail.intrestRate,
-        };
-
-        const balance = transaction.balance;
-        const lastIntrestApply = Date.now();
-        await EmiLoan.findOneAndUpdate(
-          { _id: id },
-          {
-            $push: { passbook: transaction },
-            balance,
-            lastIntrestApply,
-          }
-        );
-      }
-    });
-  } catch (err) {
-    console.log(err.message);
-  }
-};
-//EMI Loan End
 
 export const Dashboard = async () => {
   MongoSwitch(true);
@@ -802,12 +755,18 @@ export const Dashboard = async () => {
       todayDate.getMonth(),
       todayDate.getDate() + 1
     );
+    const now = new Date();
+
+    console.log(start);
+    console.log(end);
 
     const singleLoanData = await SingleLoan.find(
       { loanStatus: true, dueDate: { $gte: start, $lt: end } },
       // { loanStatus: true },
       { passbook: 0, loanStatus: 0, __v: 0, loanDate: 0, cusId: 0, dueDate: 0 }
     ).lean();
+
+    const totalSingleLoans = await SingleLoan.countDocuments().lean();
 
     const loansDetails = await EmiLoan.find(
       { loanStatus: true },
@@ -821,6 +780,8 @@ export const Dashboard = async () => {
         intrestRate: 0,
       }
     ).lean();
+
+    const totalEmiLoans = await EmiLoan.countDocuments().lean();
 
     const emiActiveLoan = loansDetails.length;
 
@@ -851,11 +812,40 @@ export const Dashboard = async () => {
       ({ lastIntrestApply, ...rest }) => rest
     );
 
+    const emiTotalDueAmount = await EmiLoan.aggregate([
+      {
+        $group: { _id: null, total: { $sum: "$dueAmount" } },
+      },
+    ]);
+
+    const singleTotalDueAmount = await SingleLoan.aggregate([
+      { $group: { _id: null, total: { $sum: "$balance" } } },
+    ]);
+
+    const emiDistAmount = await EmiLoan.aggregate([
+      {
+        $group: { _id: null, total: { $sum: "$loanAmount" } },
+      },
+    ]);
+
+    const singleDistAmount = await SingleLoan.aggregate([
+      {
+        $group: { _id: null, total: { $sum: "$loanAmount" } },
+      },
+    ]);
+
     const data = {
       single: singleLoanData,
       emi: updatedEmiLoanData,
+
       singleActiveLoan,
+      totalSingleLoans,
       emiActiveLoan,
+      totalEmiLoans,
+      emiTotalDueAmount: emiTotalDueAmount[0]?.total || 0,
+      singleTotalDueAmount: singleTotalDueAmount[0]?.total || 0,
+      emiDistAmount: emiDistAmount[0]?.total || 0,
+      singleDistAmount: singleDistAmount[0]?.total || 0,
     };
 
     return data;
@@ -863,3 +853,227 @@ export const Dashboard = async () => {
     throw new Error(err);
   }
 };
+
+//End of the Code
+
+// export const SettleEmiLoan = async (loanId) => {
+//   try {
+//     MongoSwitch(true);
+
+//     await EmiLoan.findOneAndUpdate({ _id: loanId }, { loanStatus: false });
+//     MongoSwitch(false);
+//   } catch (err) {
+//     throw new Error(err.message);
+//   }
+// };
+
+// export const IntrestApply = async () => {
+//   // console.log("Intrest Appling Function Call...");
+
+//   try {
+//     await MongoSwitch(true);
+
+//     const loanIdList = await EmiLoan.find(
+//       { loanStatus: true, balance: { $lt: 0 } },
+//       "_id"
+//     ).lean();
+//     // console.log(loanIdList);
+
+//     loanIdList.forEach(async (id) => {
+//       const loanDetail = await EmiLoan.findOne({ _id: id });
+//       const intrestDate = new Date(loanDetail.lastIntrestApply);
+//       const todayDate = new Date();
+
+//       const difference =
+//         (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
+//         todayDate.getDate() -
+//         ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
+//           intrestDate.getDate());
+
+//       const monthlyDifference =
+//         todayDate.getFullYear() * 100 +
+//         todayDate.getMonth() -
+//         (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
+
+//       const todayFlag =
+//         (todayDate.getDate() === intrestDate.getDate() &&
+//           monthlyDifference > 0) ||
+//         difference > 31;
+
+//       if (todayFlag) {
+//         const transaction = {
+//           desc: "Monthly Intrest Apply",
+//           credit: 0,
+//           debit: (loanDetail.balance / 100) * loanDetail.intrestRate,
+//           balance:
+//             loanDetail.balance +
+//             (loanDetail.balance / 100) * loanDetail.intrestRate,
+//         };
+
+//         const balance = transaction.balance;
+//         const lastIntrestApply = Date.now();
+//         await EmiLoan.findOneAndUpdate(
+//           { _id: id },
+//           {
+//             $push: { passbook: transaction },
+//             balance,
+//             lastIntrestApply,
+//           }
+//         );
+//       }
+//     });
+//   } catch (err) {
+//     console.log(err.message);
+//   }
+// };
+//EMI Loan End
+
+// const lastTransaction =
+//   loanDetails.passbook[loanDetails.passbook.length - 1];
+
+// const transaction = {
+//   desc: data.desc,
+//   credit: Number(data.credit),
+//   debit: 0,
+//   balance: lastTransaction.balance + Number(data.credit),
+// };
+
+// const numberOfDepositEmis = loanDetails.numberOfDepositEmis + 1;
+
+// if (loanDetails.loanStatus) {
+//   await EmiLoan.findOneAndUpdate(
+//     { _id: loanId },
+//     {
+//       $push: { passbook: transaction },
+//       balance: transaction.balance,
+//       numberOfDepositEmis,
+//     }
+//   );
+// }
+
+// if (transaction.balance == 0) {
+//   SettleEmiLoan(loanId);
+// }
+
+// const count = await RecentTransaction.countDocuments();
+
+// if (count > 29) {
+//   await RecentTransaction.findOneAndDelete({}, { sort: { _id: 1 } });
+// }
+
+// const newRecentTransaction = new RecentTransaction({
+//   loanId,
+//   loanType: "emi",
+//   transaction,
+// });
+
+// newRecentTransaction.save();
+
+// MongoSwitch(false);
+
+// const EmiLoanSchema = new mongoose.Schema({
+//   _id: {
+//     type: Number,
+//     required: true,
+//   },
+//   cusId: {
+//     type: Number,
+//     required: true,
+//   },
+//   loanDate: {
+//     type: Date,
+//     required: true,
+//     default: Date.now,
+//   },
+//   loanStatus: {
+//     type: Boolean,
+//     required: true,
+//     default: true,
+//   },
+//   loanAmount: {
+//     type: Number,
+//     required: true,
+//   },
+//   intrestRate: {
+//     type: Number,
+//     required: true,
+//   },
+//   balance: {
+//     type: Number,
+//     required: true,
+//   },
+
+//   numberOfEmis: {
+//     type: Number,
+//     required: true,
+//   },
+//   numberOfDepositEmis: {
+//     type: Number,
+//     required: true,
+//     default: 0,
+//   },
+//   lastIntrestApply: {
+//     type: Date,
+//     required: true,
+//     default: Date.now,
+//   },
+
+//   passbook: {
+//     type: [PassbookEntry],
+//     required: true,
+//   },
+// });
+
+// const EmiLoan = mongoose.model("EmiLoan", EmiLoanSchema);
+
+// export const CreateEmiLoan = async (cusId, data) => {
+//   const { loanAmount, intrestRate, numberOfEmis } = data;
+//   try {
+//     const _id = await LoanNumberGenerator();
+
+//     const newTransaction1 = {
+//       date: Date.now(),
+//       desc: "Loan Amount Grant",
+//       credit: 0,
+//       debit: Number(loanAmount),
+//       balance: -Number(loanAmount),
+//     };
+
+//     const newTransaction2 = {
+//       date: Date.now(),
+//       desc: "Intrest Amount Apply",
+//       credit: 0,
+//       debit: (Number(loanAmount) / 100) * intrestRate,
+//       balance:
+//         newTransaction1.balance - (Number(loanAmount) / 100) * intrestRate,
+//     };
+
+//     const balance = newTransaction2.balance;
+
+//     const passbook = [newTransaction1, newTransaction2];
+
+//     const newLoan = new EmiLoan({
+//       _id,
+//       cusId,
+//       loanAmount,
+//       intrestRate,
+//       numberOfEmis,
+//       numberOfDepositEmis: 0,
+//       balance,
+//       passbook,
+//     });
+
+//     await MongoSwitch(true);
+//     await newLoan.save();
+
+//     await Custumer.findOneAndUpdate(
+//       { _id: cusId },
+//       { $push: { emiLoanStack: _id } }
+//     );
+//   } catch (err) {
+//     console.log(err);
+//     throw new Error(err.message);
+//   }
+// };
+
+//--------------------

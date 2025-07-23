@@ -25,8 +25,8 @@ import {
   CreateEmiLoan,
   DeleteEmiLoan,
   DepositEmiLoan,
-  SettleEmiLoan,
-  IntrestApply,
+  // SettleEmiLoan,
+  // IntrestApply,
   CustumerList,
   GenerateLoanList,
   LoanDetails,
@@ -40,6 +40,10 @@ app.use(express.json());
 app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
+
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
 
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
@@ -188,6 +192,7 @@ app.get("/custumerList", JWTVerify, async (req, res) => {
   }
 });
 
+//----------------------
 app.get("/LoanList", JWTVerify, async (req, res) => {
   try {
     const response = await GenerateLoanList();
@@ -309,19 +314,19 @@ app.post("/depositEmiLoan/:id", JWTVerify, async (req, res) => {
   }
 });
 
-app.get("/settleEmiLoan/:id", JWTVerify, async (req, res) => {
-  try {
-    await SettleEmiLoan(req.params.id);
-    res.status(200).json({ message: "Loan Sattle Succesfully" });
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
+// app.get("/settleEmiLoan/:id", JWTVerify, async (req, res) => {
+//   try {
+//     await SettleEmiLoan(req.params.id);
+//     res.status(200).json({ message: "Loan Sattle Succesfully" });
+//   } catch (err) {
+//     res.status(400).json({ message: err.message });
+//   }
+// });
 
-cron.schedule("0 0 0 * * *", () => {
-  // console.log("hii");
-  IntrestApply();
-});
+// cron.schedule("0 0 0 * * *", () => {
+//   // console.log("hii");
+//   IntrestApply();
+// });
 
 //EMI Loan End
 
