@@ -755,7 +755,21 @@ export const Dashboard = async () => {
       todayDate.getMonth(),
       todayDate.getDate() + 1
     );
-    const now = new Date();
+
+    // const start = new Date(
+    //   Date.UTC(
+    //     todayDate.getUTCFullYear(),
+    //     todayDate.getUTCMonth(),
+    //     todayDate.getUTCDate()
+    //   )
+    // );
+    // const end = new Date(
+    //   Date.UTC(
+    //     todayDate.getUTCFullYear(),
+    //     todayDate.getUTCMonth(),
+    //     todayDate.getUTCDate() + 1
+    //   )
+    // );
 
     console.log(start);
     console.log(end);
@@ -785,38 +799,57 @@ export const Dashboard = async () => {
 
     const emiActiveLoan = loansDetails.length;
 
-    const emiLoanData = loansDetails.filter((loan) => {
-      const intrestDate = new Date(loan.lastIntrestApply);
+    // const emiLoanData = loansDetails.filter((loan) => {
+    //   const intrestDate = new Date(loan.lastIntrestApply);
 
-      const difference =
-        (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
-        todayDate.getDate() -
-        ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
-          intrestDate.getDate());
+    //   const difference =
+    //     (todayDate.getFullYear() * 12 + todayDate.getMonth()) * 30 +
+    //     todayDate.getDate() -
+    //     ((intrestDate.getFullYear() * 12 + intrestDate.getMonth()) * 30 +
+    //       intrestDate.getDate());
 
-      const monthlyDifference =
-        todayDate.getFullYear() * 100 +
-        todayDate.getMonth() -
-        (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
+    //   const monthlyDifference =
+    //     todayDate.getFullYear() * 100 +
+    //     todayDate.getMonth() -
+    //     (intrestDate.getFullYear() * 100 + intrestDate.getMonth());
 
-      const todayFlag =
-        (todayDate.getDate() === intrestDate.getDate() &&
-          monthlyDifference > 0) ||
-        difference > 31;
+    //   const todayFlag =
+    //     (todayDate.getDate() === intrestDate.getDate() &&
+    //       monthlyDifference > 0) ||
+    //     difference > 31;
 
-      return todayFlag;
-      // return true;
-    });
+    //   return todayFlag;
+    //   // return true;
+    // });
 
-    const updatedEmiLoanData = emiLoanData.map(
-      ({ lastIntrestApply, ...rest }) => rest
-    );
+    // const updatedEmiLoanData = emiLoanData.map(
+    //   ({ lastIntrestApply, ...rest }) => rest
+    // );
 
     const emiTotalDueAmount = await EmiLoan.aggregate([
       {
         $group: { _id: null, total: { $sum: "$dueAmount" } },
       },
     ]);
+
+    const updatedEmiLoanData = await EmiLoan.find(
+      {
+        emis: {
+          $elemMatch: {
+            emiDate: { $gte: start, $lte: end },
+          },
+        },
+      },
+      {
+        emis: 0,
+        __v: 0,
+        loanStatus: 0,
+        cusId: 0,
+        numberOfEmis: 0,
+        loanStatus: 0,
+        loanDate: 0,
+      }
+    );
 
     const singleTotalDueAmount = await SingleLoan.aggregate([
       { $group: { _id: null, total: { $sum: "$balance" } } },
