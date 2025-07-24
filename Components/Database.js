@@ -870,7 +870,6 @@ export const Dashboard = async () => {
     const data = {
       single: singleLoanData,
       emi: updatedEmiLoanData,
-
       singleActiveLoan,
       totalSingleLoans,
       emiActiveLoan,
