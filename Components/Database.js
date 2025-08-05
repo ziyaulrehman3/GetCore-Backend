@@ -765,7 +765,7 @@ export const Dashboard = async () => {
     //   )
     // );
 
-    console.log("start");
+    console.log(start);
     console.log(end);
 
     const singleLoanData = await SingleLoan.find(
@@ -897,32 +897,93 @@ export const loansListPdf = async (data) => {
         },
         {
           _id: 1,
-          name: 1,
           loanAmount: 1,
-          dueAmount: 1,
+          balance: 1,
           loanDate: 1,
           dueDate: 1,
           cusId: 1,
         }
+      ).lean();
+
+      const newResponse = await Promise.all(
+        response.map(async (item) => {
+          try {
+            const customer = await Custumer.findOne(
+              { _id: item.cusId },
+              { name: 1 }
+            ).lean();
+
+            return {
+              ...item,
+              name: customer?.name || "Unknown", // Add fallback in case not found
+            };
+          } catch (err) {
+            console.error("Error fetching customer name:", err);
+            return {
+              ...item,
+              name: "Error",
+            };
+          }
+        })
       );
 
-      return response;
+      return newResponse;
     } else {
-      const response = await EmiLoan.find({
-        loanStatus: true,
-        emis: {
-          $elemMatch: {
-            emiDate: {
-              $gte: fromDate,
-              $lte: toDate,
+      const response = await EmiLoan.find(
+        {
+          loanStatus: true,
+          emis: {
+            $elemMatch: {
+              emiDate: {
+                $gte: fromDate,
+                $lte: toDate,
+              },
             },
           },
         },
-      }).lean();
+        {
+          _id: 1,
+          totalEmi: { $size: "$emis" },
+          paidEmis: {
+            $size: {
+              $filter: {
+                input: "$emis",
+                as: "emi",
+                cond: { $eq: ["$$emi.status", "Paid"] },
+              },
+            },
+          },
+          dueAmount: 1,
+          loanDate: 1,
+          cusId: 1,
+        }
+      ).lean();
 
-      console.log(response);
+      // Use Promise.all to resolve all asynchronous operations
+      const newResponse = await Promise.all(
+        response.map(async (item) => {
+          try {
+            const customer = await Custumer.findOne(
+              { _id: item.cusId },
+              { name: 1 }
+            ).lean();
 
-      return response;
+            return {
+              ...item,
+              name: customer?.name || "Unknown", // Add fallback in case not found
+            };
+          } catch (err) {
+            console.error("Error fetching customer name:", err);
+            return {
+              ...item,
+              name: "Error",
+            };
+          }
+        })
+      );
+
+      console.log(newResponse);
+      return newResponse;
     }
   } catch (err) {
     throw new Error(err);
