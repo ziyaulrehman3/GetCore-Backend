@@ -953,7 +953,7 @@ export const loansListPdf = async (data) => {
               },
             },
           },
-          dueAmount: 1,
+          emiAmount: { $arrayElemAt: ["$emis.emiAmount", 0] },
           loanDate: 1,
           cusId: 1,
         }
