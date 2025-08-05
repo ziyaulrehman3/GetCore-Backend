@@ -744,17 +744,11 @@ export const Dashboard = async () => {
 
     const todayDate = new Date();
 
-    const start = new Date(
-      todayDate.getFullYear(),
-      todayDate.getMonth(),
-      todayDate.getDate()
-    );
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
 
-    const end = new Date(
-      todayDate.getFullYear(),
-      todayDate.getMonth(),
-      todayDate.getDate() + 1
-    );
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
 
     // const start = new Date(
     //   Date.UTC(
@@ -771,7 +765,7 @@ export const Dashboard = async () => {
     //   )
     // );
 
-    console.log(start);
+    console.log("start");
     console.log(end);
 
     const singleLoanData = await SingleLoan.find(
@@ -881,6 +875,55 @@ export const Dashboard = async () => {
     };
 
     return data;
+  } catch (err) {
+    throw new Error(err);
+  }
+};
+
+export const loansListPdf = async (data) => {
+  const fromDate = new Date(data.from);
+  const toDate = new Date(data.to);
+  fromDate.setHours(0, 0, 0, 0);
+  toDate.setHours(23, 59, 59, 999);
+  console.log(toDate);
+
+  try {
+    MongoSwitch(true);
+    if (data.type == "single") {
+      const response = await SingleLoan.find(
+        {
+          loanStatus: true,
+          dueDate: { $gte: fromDate, $lte: toDate },
+        },
+        {
+          _id: 1,
+          name: 1,
+          loanAmount: 1,
+          dueAmount: 1,
+          loanDate: 1,
+          dueDate: 1,
+          cusId: 1,
+        }
+      );
+
+      return response;
+    } else {
+      const response = await EmiLoan.find({
+        loanStatus: true,
+        emis: {
+          $elemMatch: {
+            emiDate: {
+              $gte: fromDate,
+              $lte: toDate,
+            },
+          },
+        },
+      }).lean();
+
+      console.log(response);
+
+      return response;
+    }
   } catch (err) {
     throw new Error(err);
   }

@@ -22,6 +22,7 @@ import {
   DeleteSingleLoan,
   DepositSingleLoan,
   SettleSingleLoan,
+  loansListPdf,
   CreateEmiLoan,
   DeleteEmiLoan,
   DepositEmiLoan,
@@ -32,6 +33,7 @@ import {
   LoanDetails,
   RecentTransactionList,
   Dashboard,
+  // loansList,
 } from "./Components/Database.js";
 
 const app = express();
@@ -311,6 +313,18 @@ app.post("/depositEmiLoan/:id", JWTVerify, async (req, res) => {
     res.status(200).json({ message: "Amount Deposit Succesfully" });
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+app.post("/loansListPdf", async (req, res) => {
+  console.log(req.body);
+  try {
+    const response = await loansListPdf(req.body);
+    res.status(200).json({ message: "All Loans List", data: response });
+  } catch (err) {
+    res.status(400).json({
+      message: err.message,
+    });
   }
 });
 
